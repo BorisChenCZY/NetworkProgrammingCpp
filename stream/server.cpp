@@ -12,6 +12,7 @@
 #include <thread>
 #include <string_view>
 #include <unistd.h>
+#include <csignal>
 
 using namespace std::literals::string_view_literals;
 
@@ -21,8 +22,7 @@ constexpr const int BACKLOG = 1024;
 // Global flag for graceful shutdown
 std::atomic<bool> g_should_exit{false};
 
-// Signal handler
-void handle_signal(int sig) {
+void handleSignal(int sig) {
     std::println("Received signal {}, shutting down..", sig);
     g_should_exit = true;
 }
@@ -73,24 +73,33 @@ int createSocket(const char* port) {
     return -1;
 }
 
-void processClientFd(int cliendFd) {
+void processClientFd(int clientFd) {
     // fork?
     // but we'll go with thread
-    std::jthread client_thread([cliendFd] {
+    // TODO can we go with goroutine
+    std::jthread client_thread([clientFd] {
+        auto closeFd = [](int fd) { close(fd); };
+        std::unique_ptr<int, decltype(closeFd)> fd_guard(new int(clientFd), closeFd);
+
         std::string_view msg = "Hello world.\n"sv;
-        if (send(cliendFd, reinterpret_cast<const void*>(msg.data()), msg.size(), 0) != msg.size()) {
+        if (send(clientFd, reinterpret_cast<const void*>(msg.data()), msg.size(), 0) != msg.size()) {
             // we do not expect to exceed MTU here.
             perror("[client_thread] processClientFd::send");
         }
 
-        if (shutdown(cliendFd, SHUT_RDWR) == -1) {
+        if (shutdown(clientFd, SHUT_RDWR) == -1) {
             perror("[client_thread] processClientFd::shutdown");
         }
     });
 }
 
 void run(int serviceSockFd) {
-    while (true) {
+    auto closeFd = [](int *fd) {
+        return close(*fd);
+    };
+    std::unique_ptr<int, decltype(closeFd)> guard(&serviceSockFd, closeFd);
+
+    while (!g_should_exit) {
         sockaddr_storage clientSockAddr;
         socklen_t len = sizeof(sockaddr_storage);
         auto clientFd = accept(serviceSockFd, reinterpret_cast<sockaddr*>(&clientSockAddr), &len);
@@ -104,6 +113,10 @@ void run(int serviceSockFd) {
 }
 
 int main() {
+    // Set up signal handling
+    std::signal(SIGINT, handleSignal);
+    std::signal(SIGTERM, handleSignal);
+
     auto serviceSockFd = createSocket(PORT);
     if (serviceSockFd == -1) return -1;
 
