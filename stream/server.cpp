@@ -78,7 +78,7 @@ void processClientFd(int clientFd) {
     // but we'll go with thread
     // TODO can we go with goroutine
     std::jthread client_thread([clientFd] {
-        auto closeFd = [](int fd) { close(fd); };
+        auto closeFd = [](int *fd) { close(*fd); };
         std::unique_ptr<int, decltype(closeFd)> fd_guard(new int(clientFd), closeFd);
 
         std::string_view msg = "Hello world.\n"sv;
