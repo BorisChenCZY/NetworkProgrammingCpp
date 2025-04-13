@@ -55,6 +55,10 @@ int prepareSocket(std::string_view dest_addr, std::string_view port) {
 
 int main() {
     int clientFd = prepareSocket(DEST_ADDR, DEST_PORT);
+    if (clientFd == -1) {
+        return -1;
+    }
+
     auto fdCloser = [](int *fd) {
         close(*fd);
     };
