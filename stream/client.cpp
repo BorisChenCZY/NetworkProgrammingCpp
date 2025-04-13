@@ -70,7 +70,8 @@ int main() {
     // now the socket is connected.
     // we want to receive
     // note that this is blocking mode
-    while ((size = recv(clientFd, buffer, MTU, 0)) > 0) {
+    while ((size = recv(clientFd, buffer, MTU - 1, 0)) > 0) {
+        buffer[size] = '\0';
         std::print("{}", std::string(buffer, size));
     }
     // if recv returns 0, means its closed
