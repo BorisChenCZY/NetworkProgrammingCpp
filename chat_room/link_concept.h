@@ -7,5 +7,5 @@
 template <typename T>
 concept LinkConcept = requires (T link)
 {
-    {link.fd()} -> std::convertible_to<int>;
+    {link.Fd()} -> std::same_as<int>;
 };

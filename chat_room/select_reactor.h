@@ -11,8 +11,10 @@
 #include <sys/errno.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <iostream>
 #include <print>
 #include <ranges>
+#include <unordered_map>
 #include <_stdio.h>
 #include <vector>
 
@@ -24,7 +26,7 @@ class SelectReactor {
 public:
     SelectReactor() {
         FD_ZERO(&m_readFds);
-        m_readCount = 0;
+        FD_ZERO(&m_readReadyFds);
     }
 
     void Stop() {
@@ -34,9 +36,11 @@ public:
     template <typename T>
     void AddHandler(T* handler) {
         if constexpr (std::is_base_of<ReadListener, T>::value) {
-            m_readListeners.emplace_back(handler);
-            FD_SET(handler->fd(), &m_readFds);
-            m_readCount++;
+            auto fd = handler->Fd();
+            m_readListeners[fd] = std::unique_ptr<ReadListener>(static_cast<ReadListener*>(handler));
+            FD_SET(fd, &m_readFds);
+            std::cout << "fd set: " << fd << std::endl;
+            m_maxFd = std::max(m_maxFd, fd);
         }
 
         // TODO can add WriteListener and ExceptionListener here
@@ -52,6 +56,8 @@ public:
                 return;
             }
 
+            std::cout << "processing..." << std::endl;
+
             // else process
             Process();
         }
@@ -61,20 +67,24 @@ protected:
     std::expected<int, int> Wait() {
         // here we call select
         m_readReadyFds = m_readFds;
-        if (int error; ( error = select(m_readCount + 1, &m_readReadyFds, 0, 0, 0)) == -1) {
+        std::cout << "waiting..." << std::endl;
+        if (int error; ( error = select(m_maxFd + 1, &m_readReadyFds, nullptr, nullptr, nullptr)) == -1) {
             // something is wrong
+            std::cout <<"failed..." << std::endl;
             return std::unexpected<int>(errno);
         }
+        std::cout << "waited" << std::endl;
 
         return 0;
     }
 
     std::expected<int, int> Process() {
-        auto readFds = std::ranges::views::iota(0u, m_readCount) | std::ranges::views::filter([&](int i) {
+        auto readFds = std::ranges::views::iota(0, m_maxFd) | std::ranges::views::filter([&](int i) {
             // TODO this is not efficient
             return FD_ISSET(i, &m_readReadyFds);
         });
 
+        // this has to be a map
         std::ranges::for_each(readFds, [&](int fdIdx) {
             int ret = m_readListeners[fdIdx]->OnRead();
             if (ret < 0) {
@@ -89,10 +99,10 @@ protected:
     }
 
 private:
-    std::vector<std::unique_ptr<ReadListener>> m_readListeners{};
+    std::unordered_map<FileDescriptorT, std::unique_ptr<ReadListener>> m_readListeners{};
     fd_set m_readFds;
     fd_set m_readReadyFds;
-    uint16_t m_readCount{0};
+    FileDescriptorT m_maxFd;
     bool m_running{true};
 };
 static_assert(ReactorConcept<SelectReactor>);

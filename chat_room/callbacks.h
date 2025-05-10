@@ -7,5 +7,5 @@
 struct HandlerBase { };
 
 struct ReadListener {
-    virtual int OnRead() = 0;
+    virtual size_t OnRead() = 0;
 };

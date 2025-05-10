@@ -15,7 +15,7 @@ public:
 
     FileDescriptorT Fd() const;
 
-    ErrorTypeT Read(std::span<uint8_t> buffer);
+    std::expected<size_t, ErrorTypeT> Read(std::span<uint8_t> buffer);
 
     ~TCPLink() {
         if (m_fd != -1) {
@@ -38,11 +38,12 @@ inline FileDescriptorT TCPLink::Fd() const {
     return m_fd;
 }
 
-inline ErrorTypeT TCPLink::Read(std::span<uint8_t> buffer) {
-    if (int error; (error = ::read(m_fd, reinterpret_cast<void*>(buffer.data()), buffer.size())) != 0) {
-        return -errno;
+inline std::expected<size_t, ErrorTypeT> TCPLink::Read(std::span<uint8_t> buffer) {
+    if (ssize_t size; (size = ::read(m_fd, reinterpret_cast<void*>(buffer.data()), buffer.size())) != 0) {
+        return std::unexpected<ErrorTypeT>(-errno);
     }
-
-    return 0;
+    else {
+        return size;
+    }
 }
 

@@ -5,9 +5,11 @@
 #pragma once
 #include <cerrno>
 #include <expected>
+#include <iostream>
 #include <netdb.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
+
 #include "types.h"
 
 
@@ -40,6 +42,7 @@ private:
 };
 
 inline FileDescriptorT TCPServerLink::Fd() const {
+    std::cout << "fd: " << m_fd << std::endl;
     return m_fd;
 }
 
@@ -83,6 +86,8 @@ inline ErrorTypeT TCPServerLink::Init(const char* port) {
             int flags = fcntl(m_fd, F_GETFL, 0);
             fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
         }
+
+        ::listen(m_fd, 1024);
 
         return 0;
     }

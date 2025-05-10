@@ -12,7 +12,7 @@
 template <typename T>
 concept ProcessorConcept = requires (T processor, std::span<const uint8_t> data)
 {
-  {processor.Process(data)}  -> std::same_as<int>;
+  {processor.Process(data)}  -> std::same_as<size_t>;
 };
 
 template <typename T>

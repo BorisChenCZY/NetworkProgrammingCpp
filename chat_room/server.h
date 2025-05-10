@@ -10,31 +10,30 @@
 #include "reactor_concept.h"
 #include "tcp_link.h"
 
-template <ReactorConcept ReactorT, typename ClientT>
+template <ReactorConcept ReactorT>
 class Server {
 public:
+    Server(ReactorT & reactor):  m_reactor(reactor) {}
+
     int AddClient(int clientFd) {
         // this needs to create a clientHandler
         // create client channel and proecssor
         // add to reactor
         // TCPLink link(clientFd);
-        ClientT client;
-        auto clientHandler = new ClientHandler<ReactorT, TCPLink, ClientT>(std::make_unique<TCPLink>(clientFd),
-            m_reactor,
-            std::move(client)
+        std::cout << "Adding client: " << clientFd << std::endl;
+        auto clientHandler = new ClientHandler<TCPLink, Server>(std::make_unique<TCPLink>(clientFd),
+            *this
             );
         m_reactor.AddHandler(clientHandler); // ownership transfer to reactor
 
         return 0;
     }
 
+    size_t Process(std::span<const uint8_t> buffer) {
+        std::print("Message: {}", std::string((char*)buffer.data(), buffer.size()));
+        return buffer.size();
+    }
+
 private:
-    ReactorT m_reactor;
-    ServerHandler<ReactorT, TCPServerLink, Server> m_handler;
-    // std::unordered_set<
-};
-
-template <ReactorConcept ReactorT>
-class Client {
-
+    ReactorT& m_reactor;
 };

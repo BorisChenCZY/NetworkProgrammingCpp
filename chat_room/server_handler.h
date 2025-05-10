@@ -16,52 +16,56 @@
 template <ReactorConcept ReactorT, LinkConcept LinkT, ServerProcessorConcept ProcessorT>
 class ServerHandler: public ReadListener, HandlerBase {
 public:
-    ServerHandler(std::unique_ptr<LinkT> link, ReactorT* reactor, ProcessorT&& processor):  m_processor(std::move(processor)) {
-        m_link.reset(link);
+    ServerHandler(std::unique_ptr<LinkT>&& link, ReactorT* reactor, ProcessorT& processor):  m_processor(processor) {
+        m_link.swap(link);
         reactor->AddHandler(this);
     }
 
-    int OnRead() override {
-        auto result = m_link->accept();
+    size_t OnRead() override {
+        auto result = m_link->Accept();
         if (result.has_value()) {
             FileDescriptorT clientFd = result.value();
-            m_processor.AddClient(clientFd);
+            return m_processor.AddClient(clientFd);
         }
+        return result.error();
     }
 
     int Fd() const {
-        return m_link->fd();
+        return m_link->Fd();
     }
 
 private:
     std::unique_ptr<LinkT> m_link;
-    ProcessorT m_processor;
+    ProcessorT& m_processor;
 };
 
-template <ReactorConcept ReactorT, LinkConcept LinkT, ProcessorConcept ProcessorT>
+template <LinkConcept LinkT, ProcessorConcept ProcessorT>
 class ClientHandler: public ReadListener, HandlerBase {
-    ClientHandler(std::unique_ptr<LinkT> link, ReactorT* reactor, ProcessorT&& processor):  m_processor(std::move(processor)) {
-        m_link.reset(link);
+public:
+    ClientHandler(std::unique_ptr<LinkT>&& link, ProcessorT& processor):  m_processor(processor) {
+        m_link.swap(link);
     }
 
-    int OnRead() override {
+    size_t OnRead() override {
         // auto data = m_link->
-        if (int error; (error = m_link->Read(m_buffer) < 0))
+        auto result = m_link->Read(m_buffer);
+        if (not result.has_value())
         {
             // will get this handler removed
-            return error;
+            return result.error();
         }
-        else if (error != 0) {
-            std::print(stderr, "error not expected: {}", error);
-            throw std::exception();
-        }
+        auto size = result.value();
 
         // process
-        m_processor.Process(m_buffer);
+        return m_processor.Process(std::span<uint8_t>(m_buffer.data(), size));
+    }
+
+    FileDescriptorT Fd() const {
+        return m_link->Fd();
     }
 
 private:
     std::unique_ptr<LinkT> m_link;
-    ProcessorT m_processor;
+    ProcessorT& m_processor;
     std::array<uint8_t, 1500 /*MTU*/> m_buffer;
 };
